@@ -8,16 +8,16 @@ import tensorflow as tf
 import numpy as np
 
 
-# In[26]:
+# In[113]:
 
 
 class GenomeLayer:
     """
     Represents a layer in a genome model.
     
-    An instance of the represented keras layer can be created using the `.to_layer()` function on a genome instance.
+    An instance WITHOUT WEIGHTS of the represented keras layer can be created using the `.to_layer()` function on a genome instance.
     """
-    def __init__(self, units, activation, weights, bias, ltype='dense', weights_filler='glorot_uniform', bias_filler='glorot_uniform', name=None):
+    def __init__(self, units, activation, weights=None, bias=None, ltype='dense', weights_filler='glorot_uniform', bias_filler='glorot_uniform', name=None):
         """
         Initiates a genome layer.
         
@@ -27,9 +27,9 @@ class GenomeLayer:
             The number of units in the layer.
         activation: string or function
             The activation function of the layer.
-        weights: array or list
+        weights: array or list, optional
             The connections to the outbounding layer.
-        bias: array or list
+        bias: array or list, optional
             The biases of the layer.
         ltype: str, optional
             The type of a keras layer, currently only input/dense are supported.
@@ -47,10 +47,8 @@ class GenomeLayer:
         self.bias_filler = tf.keras.initializers.get(bias_filler) if type(bias_filler) is str else bias_filler
         self.units = units
         self.activation = activation
-        if weights:
-            self.weights = np.array(weights)
-        if bias:
-            self.bias = np.array(bias)
+        self.weights = np.array(weights) if weights else None
+        self.bias = np.array(bias) if bias else None
         self.name = name
         
     @staticmethod
@@ -70,37 +68,11 @@ class GenomeLayer:
         """
         return GenomeLayer(units, None, None, None, ltype='input', name=name)
     
-    def create_outbounding_layer(self, units, activation, bias=None, ltype='dense', weights_filler='glorot_uniform', bias_filler='glorot_uniform', name=None):
-        """
-        Creates an outbounding layer genome for the current layer while filling the weights of the current layer to match the new layer using the `weights_filler`.
-        
-        Parameters
-        -----------
-        units: int
-            The number of units in the layer.
-        activation: string or function
-            The activation function of the layer.
-        bias: array or list, optional
-            The biases of the layer.
-        ltype: str, optional
-            The type of a keras layer, currently only input/dense are supported.
-        weights_filler: str or function, optional
-            Function used to fill missing connections with the outbounding layer. 
-        bias_filler: str or function, optional
-            Function used to fill missing biases in the current layer.
-        name: str, optional
-            The name of the genome layer, later used as the name of the keras layer.
-        
-        Returns
-        --------
-        out: GenomeLayer
-            A GenomeLayer instance.
-        """
-        
-    
     def to_layer(self, inputs=None):
         """
-        Converts the current genome layer to a keras layer and connects it to a preceding layer (for types other than "input").
+        Converts the current genome layer to a keras layer WITHOUT THE WEIGHTS and connects it to a preceding layer (for types other than "input").
+        NOTE: The keras layer is created WITHOUT THE WEIGHTS OF THE GENOME, meaning that it is created with RANDOM WEIGHTS, the weights of the genome are attached to the keras layer
+        only when creating a keras model with `GenomeModel.to_model`. 
         
         Parameters
         -----------
@@ -117,21 +89,40 @@ class GenomeLayer:
         elif self.ltype == 'dense':
             layer = tf.keras.layers.Dense(self.units, activation=self.activation, name=self.name)
             layer(inputs.output)
-            layer.set_weights([self.weights, self.biases])
             return layer
+        
+    def connect_layer(self, outbound_layer):
+        import utils
+        """
+        Naively connect the weights of the current layer to the given outbounding layer.
+        The missing weights are filled using the `weights_filler` function while the unused weights are removed.
+        
+        Parameters
+        -----------
+        outbound_layer: GenomeLayer
+            The outbounding layer.
+        
+        Returns
+        --------
+        out: None
+        """
+        new_weights_shape = self.units, outbound_layer.units
+        weights = self.weights if self.weights else [[]]
+        new_weights = self.weights_filler(new_weights_shape)
+        self.weights = utils.fill_array(new_weights, weights)
     
     def __str__(self):
         s = f'<GenomeLayer type="{self.ltype}" units="{self.units}"'
         if self.ltype != 'input':
             s += f' activation="{self.activation}"'
         if self.name:
-            s += f' name="{self.name}"'
+            s+= f' name="{self.name}"'
         return s + '>'
     def __repr__(self):
         return self.__str__()
 
 
-# In[44]:
+# In[112]:
 
 
 class GenomeModel:
@@ -144,25 +135,25 @@ class GenomeModel:
     
     An instance of the represented keras model can be created using the `.to_model()` function on a genome instance.
     """
-    def __init__(self, layers, name=None):
+    def __init__(self, layers=None, name=None):
         """
         Initiates a genome model.
         
         Parameters
         -----------
-        layers: list
+        layers: list of GenomeLayer, optional
             A list of GenomeLayer instances, note that the first layer must be of type "input".
         name: string
             The name of the genome, later used as the name of the keras model.
         """
-        if layers[0].ltype != 'input':
+        if layers and layers[0].ltype != 'input':
             raise Exception('Expected first layer to be of type "input" but instead received "{}"'.format(layers[0].ltype))
         self.layers = layers
         self.name = name
         self.fitness = 0
         
     @staticmethod
-    def generate_base(inputs, hidden, outputs, activation='relu'):
+    def generate_base(inputs, hidden, outputs, activation='relu', name=None):
         """
         Generates a base genome instance based on the given parameters.
         
@@ -182,17 +173,18 @@ class GenomeModel:
         out: GenomeModel
             A genome model.
         """
-        layers = []
+        genome = GenomeModel(name=name)
+        genome.add_input_layer(inputs)
         
-        input_genome = GenomeLayer.create_input(inputs)
-        layers.append(input_genome)
-        
-        for i, units in enumerate(np.append(np.ones(hidden), outputs)):
-            prev_genome = input_genome if i == 0 else current_genome
-            current_genome = prev_genome.create_outbounding_layer(units, activation)
-            layers.append(current_genome)
+        for i in range(hidden):
+            genome.add_hidden_layer(1, activation)
             
-        return GenomeModel(layers)
+        genome.add_output_layer(outputs, activation)
+        
+        genome.connect_layers()
+        genome.fill_biases()
+        
+        return genome
     
     def to_model(self):
         """
@@ -202,21 +194,29 @@ class GenomeModel:
         --------
         out: keras.layers.Model
             A keras model.
-        """
+        """        
         inputs_genome = self.layers[0]
         inputs_layer = prev_layer = inputs_genome.to_layer()
         
+        weights = []
+        weights.extend([inputs_genome.weights, inputs_genome.bias])
+        
         for layer_genome in self.layers[1:-1]:
+            weights.extend([layer_genome.weights, layer_genome.bias])
             layer_genome.to_layer(prev_layer)
             prev_layer = layer_genome
         
         outputs_genome = self.layers[-1]
         outputs_layer = outputs_genome.to_layer(prev_layer)
         
-        return tf.keras.Model(inputs=inputs_layer.input, outputs=outputs_layer.output, name=self.name)
+        model = tf.keras.Model(inputs=inputs_layer.input, outputs=outputs_layer.output, name=self.name)
+        model.set_weights(weights)
+        return model
     
     def __str__(self):
-        s = f'<GenomeModel inputs="{self.layers[0].units}" outputs="{self.layers[-1].units}"'
+        s = f'<GenomeModel'
+        if self.layers and len(self.layers):
+            s += f' inputs="{self.layers[0].units}" outputs="{self.layers[-1].units}"'
         if self.name:
             s+= f' name="{self.name}"'
         return s + '>'
@@ -233,5 +233,9 @@ class GenomeModel:
 # In[ ]:
 
 
-
+# Todo
+# Decide how to handle the weights of the layers.
+# Decide how the fill & clear connections.
+# Decide when to apply fill & clear.
+# Add mutations module with `mutate_genome`
 

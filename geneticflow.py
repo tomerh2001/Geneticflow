@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[33]:
+# In[1]:
 
 
 import tensorflow as tf
@@ -16,13 +16,7 @@ import genomes
 from genomes import GenomeModel, GenomeLayer
 
 
-# In[ ]:
-
-
-
-
-
-# In[32]:
+# In[2]:
 
 
 class Neat:
@@ -110,11 +104,11 @@ class Neat:
         return base_genome
 
 
-# In[31]:
+# In[3]:
 
 
 neat = Neat()
-neat.compile(inputs=4, hidden=2, outputs=4)
+# neat.compile(inputs=4, hidden=2, outputs=4)
 
 
 # In[4]:
