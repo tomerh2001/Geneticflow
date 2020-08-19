@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 
 import tensorflow as tf
 import numpy as np
-from tensorflow import keras
 
 
 # In[63]:
 
 
 def connect_weights(layer1, layer2, fill_method='random', from_layer2=False):
+    import utils
+    
     """
     Naivley create weights that match layer1 to layer2 while filling missing connections.
     
@@ -45,7 +46,7 @@ def connect_weights(layer1, layer2, fill_method='random', from_layer2=False):
     else:
         raise Exception('Fill method can only be zeros/ones/random (got {}).'.format(fill_method))
 
-    return fill_array(layer1_new_weights, layer1_outbound_weights)
+    return utils.fill_array(layer1_new_weights, layer1_outbound_weights)
 
 
 # In[12]:
@@ -72,10 +73,10 @@ def clone_layer(layer, config=None):
     if config:
         layer_config = {**layer_config, **config}
     
-    if type(layer) is keras.layers.InputLayer:
-        return keras.layers.InputLayer.from_config(layer_config)
-    elif type(layer) is keras.layers.Dense:
-        return keras.layers.Dense.from_config(layer_config)
+    if type(layer) is tf.keras.layers.InputLayer:
+        return tf.keras.layers.InputLayer.from_config(layer_config)
+    elif type(layer) is tf.keras.layers.Dense:
+        return tf.keras.layers.Dense.from_config(layer_config)
     else:
         raise Exception('Layer cloning of type {} is not supported currently. (note: this is a naive implementation and not a final release)'.format(type(layer)))
 
@@ -102,7 +103,7 @@ def generate_network(inputs, hidden, outputs, activations='relu', name=None):
     --------
     out: keras.Model
     """
-    inputs = x = keras.Input(inputs)
+    inputs = x = tf.keras.Input(inputs)
     hidden = hidden if type(hidden) is list else [1 for i in range(hidden)]
     activations = activations if type(activations) is list else [activations for i in range(len(hidden) + 1)]
 
@@ -110,31 +111,10 @@ def generate_network(inputs, hidden, outputs, activations='relu', name=None):
         raise Exception('Expected {} activation functions but got {}.'.format(len(hidden) + 1, len(activations)))
 
     for nodes, activation in zip(hidden, activations[:-1]):
-        x = keras.layers.Dense(nodes, activation=activation)(x)
-    outputs = keras.layers.Dense(outputs, activation=activations[-1])(x)
+        x = tf.keras.layers.Dense(nodes, activation=activation)(x)
+    outputs = tf.keras.layers.Dense(outputs, activation=activations[-1])(x)
 
-    return keras.Model(inputs=inputs, outputs=outputs, name=name)
-
-
-# In[5]:
-
-
-def chance(rate, size=None):
-    """
-    Returns true based on the propabilty (rate) provided.
-    
-    Parameters
-    -----------
-    rate: int
-        A number between 0-1 that represents a probability.
-    size: int or tuple, optional
-        The shape of the output.
-    
-    Returns
-    --------
-    out: bool
-    """
-    return np.random.random_sample(size) < rate
+    return tf.keras.Model(inputs=inputs, outputs=outputs, name=name)
 
 
 # In[8]:
@@ -157,7 +137,7 @@ def connect_layers(layers, weights_func=None, biases_func=None):
     --------
     out: keras.Model
     """
-    if type(layers[0]) is not keras.layers.InputLayer:
+    if type(layers[0]) is not tf.keras.layers.InputLayer:
         raise Exception('First layer must be a keras.layers.InputLayer object, instead got {}'.format(type(layers[0])))
         
     if not weights_func:
@@ -169,80 +149,14 @@ def connect_layers(layers, weights_func=None, biases_func=None):
         layer_biases = biases_func(layer1, layer2) if biases_func else layer2.bias.numpy()
         weights.extend([layer_weights, layer_biases])
         
-        if type(layer1) is keras.layers.InputLayer:
+        if type(layer1) is tf.keras.layers.InputLayer:
             inputs = x = clone_layer(layer1).input
         
         x = clone_layer(layer2)(x)
         
-    model = keras.Model(inputs=inputs, outputs=x)
+    model = tf.keras.Model(inputs=inputs, outputs=x)
     model.set_weights(weights)
     return model
-
-
-# In[ ]:
-
-
-def mutate_network(model, node_add_rate=0.1, node_remove_rate=0.1, layer_add_rate=0.01, layer_remove_rate=0.01, weights_change_rate=0.2, biases_change_rate=0.7):
-    """
-    Returns a mutated version of the given network.
-    
-    Parameters
-    -----------
-    model: keras.Model
-        A keras model to mutate.
-    node_add_rate: int, optional
-        The chance of a new node to be added for each layer.
-    node_remove_rate: int, optional
-        The chance of a node to be removed from each layer.
-    layer_add_rate: int, optional
-        The chance of a new layer to be added to the network.
-    layer_remove_rate: int, optional
-        The chance of a layer to be removed from the network.
-    weights_change_rate: int, optional
-        The chance that the weights of each layer will change.
-    biases_change_rate: int, optional
-        The chance that the biases of each layer will change.
-
-    Returns
-    --------
-    out: keras.Model
-    """
-    inputs = clone_layer(model.layers[0])
-
-
-# In[60]:
-
-
-def fill_array(a, b):
-    """
-    Fill an array with another array while maintaining original values where they have not been overwritten.
-    
-    Parameters
-    -----------
-    a: array or list
-        An array.
-    b: array or list
-        An array.
-    
-    Returns
-    --------
-    out: np.array
-        A copy of the first array where values from the second array are overwritten in the shared dimensions between the two arrays.
-        
-    Examples
-    ---------
-    >> a = np.zeros((3, 3))
-    >> b = np.ones((2, 2))
-    
-    # array([[1., 1., 0.],
-    #       [1., 1., 0.],
-    #       [0., 0., 0.]])
-    """
-    a, b = np.array(a), np.array(b)
-    x1, x2 = np.min((a.shape, b.shape), 0)
-    c = a.copy()
-    c[:x1, :x2] = b[:x1, :x2]
-    return c
 
 
 # In[ ]:

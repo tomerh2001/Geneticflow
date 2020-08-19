@@ -1,39 +1,51 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[33]:
 
 
 import tensorflow as tf
 import numpy as np
 from tensorflow import keras
 
-from utils import utils
-from crossovers import crossovers
-from mutations import mutations
+import utils
+import tfutils
+import crossovers
+import genomes
+
+from genomes import GenomeModel, GenomeLayer
 
 
-# In[2]:
+# In[ ]:
+
+
+
+
+
+# In[32]:
 
 
 class Neat:
     def __init__(self):
         self.compiled = False
     
-    def compile(self, inputs, outputs, hidden=0, activations='relu', node_mutate_rate=0.01, layer_mutate_rate=0.01, bias_mutate_rate=0.7):
+    def compile(self, inputs, hidden, outputs, activation='relu', parents=2, node_add_rate=0.1, node_remove_rate=0.1, layer_add_rate=0.01, layer_remove_rate=0.01, weights_change_rate=0.2, biases_change_rate=0.7):
         """
-        Compiles the neat object with network parameters.
+        Compiles the neat object with parameters for the base genome and the evolution process.
+        Calling this function would create a base genome from the given network parameters.
         
         Parameters
         -----------
-        inputs: int
-            The number of nodes in the first layer.
-        outputs: int
-            The number of nodes in the last layer.
-        hidden: int or list, optional
-            The number of initial hidden layers, this can also be a list where each value is the number of nodes in each layer (the default is 1).
-        activations: str or list, optional
-            The activation functions for all the nodes in the network, this can also be a list where each value is an activation function for each layer (not including the input layer!).
+        inputs: int, optional
+            The number of nodes in the input layer of the base genome.
+        hidden: int, optional
+            The number of initial hidden layers in the base genome, each layer starts with a single node.
+        outputs: int, optional
+            The number of nodes in the output layer of the base genome.
+        activation: str, optional
+            The activation function for all of the initial layers of the base genome.
+        parents: int, optional
+            The maximum number of parents required to create a child, the default is 2, meaning that a child would be created from the 2 fittest genomes.
         node_mutate_rate: int, optional
             The chance of a new node being added for each layer.
         layer_mutate_rate: int, optional
@@ -45,25 +57,64 @@ class Neat:
         --------
         out: None
         """
-        self.inputs = inputs
-        self.outputs = outputs
-        self.hidden = hidden
-        self.activations = activations
-        self.node_mutate_rate = node_mutate_rate
-        self.layer_mutate_rate = layer_mutate_rate
-        self.bias_mutate_rate = bias_mutate_rate
+        base_genome = GenomeModel.generate_base(inputs, hidden, outputs, activation)
+        self.compile_base(base_genome, parents, node_add_rate, node_remove_rate, layer_add_rate, layer_remove_rate, weights_change_rate, biases_change_rate)
+        
+    def compile_base(self, base_genome, parents=2, node_add_rate=0.1, node_remove_rate=0.1, layer_add_rate=0.01, layer_remove_rate=0.01, weights_change_rate=0.2, biases_change_rate=0.7):
+        """
+        Compiles the neat object with a specific base genome and evolution parameters.
+        
+        Parameters
+        -----------
+        base_genome: GenomeModel
+            The initial genome which is used as a base for the first population.
+        parents: int, optional
+            The maximum number of parents required to create a child, the default is 2, meaning that a child would be created from the 2 fittest genomes.
+        node_mutate_rate: int, optional
+            The chance of a new node being added for each layer.
+        layer_mutate_rate: int, optional
+            The chance of a new layer being added.
+        bias_mutate_rate: int, optional
+            The chance of changing the bias for each layer.
+            
+        Returns
+        --------
+        out: None
+        """
+        self.base_genome = base_genome
+        self.parents = parents
+        self.node_add_rate = node_add_rate
+        self.node_remove_rate = node_remove_rate
+        self.layer_add_rate = layer_add_rate
+        self.layer_remove_rate = layer_remove_rate
+        self.weights_change_rate = weights_change_rate
+        self.biases_change_rate = biases_change_rate
         self.compiled = True
         
-    def fit(self, fit_func, population=100, generations=50, crossover=None, mutation=None):
-        if not self.compiled:
-            raise Exception('Neat object is not compiled, you must compile the object before training (see ".compile").')
+    def fit(self, fit_func, population=100, generations=50, crossover=None, mutation=None, fit_mode='multi'):
+        base_genome = self.base_genome
+        
+        for generation in generations:
+            population = GenomeModel.generate_population(base_genome, mutation=mutation)
+            
+            if fit_mode == 'single':
+                population = [fit_func(genome) for genome in population]
+            elif fit_mode == 'multi':
+                population = fit_func(genome)
+            
+            population.sort(key=lambda g: g.fitness)
+            parents = population[-self.parents:]
+            
+            base_genome = crossover(parents)
+        
+        return base_genome
 
 
-# In[3]:
+# In[31]:
 
 
 neat = Neat()
-neat.compile(inputs=4, outputs=4)
+neat.compile(inputs=4, hidden=2, outputs=4)
 
 
 # In[4]:
@@ -71,39 +122,6 @@ neat.compile(inputs=4, outputs=4)
 
 # history = neat.fit(func, population=100, generations=50)
 # winner = neat.winner
-
-
-# In[ ]:
-
-
-
-
-
-# In[5]:
-
-
-node_add_rate=0.3
-node_remove_rate=0.1
-layer_add_rate=0.01
-layer_remove_rate=0.01
-weights_change_rate=0.2
-biases_change_rate=0.7
-
-
-# In[6]:
-
-
-model = utils.generate_network(4, [2], 4)
-layer1 = model.layers[1]
-layer2 = model.layers[2]
-
-utils.connect_weights(layer1, layer2)
-
-
-# In[ ]:
-
-
-
 
 
 # In[ ]:
