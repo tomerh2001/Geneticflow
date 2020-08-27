@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[42]:
+# In[14]:
 
 
 import tensorflow as tf
@@ -9,26 +9,22 @@ import numpy as np
 import copy
 
 
-# In[39]:
+# In[12]:
 
 
 class Genome:
     """
     Represents a genome. Used to hold the "DNA" of an object.
     This is the base class for all other genomes.
-    
-    Creating a genome with 
     """
-    def __init__(self, name=None, **kwargs):
+    def __init__(self, name=None, **props):
         self.name = name
         self.fitness = 0
-        for arg in kwargs:
-            self.__dict__[arg] = kwargs[arg]
-        self.test = 'hello!'
+        self.props = props
         
     def clone(self):
         """Returns a deep copy of the current genome."""
-        return copy.deepcopy(self)
+        return Genome(name=self.name, **copy.deepcopy(self.props))
     
     def generate_population(self, population, mutation):
         """
@@ -49,12 +45,21 @@ class Genome:
         return [mutation(self.clone()) for i in range(population)]
         
     def __str__(self):
-        return f'<Genome fitness={self.fitness}>'
+        s = f'<Genome fitness="{self.fitness}"'
+        if self.name:
+            s += f' name="{self.name}"'
+        s+= '>'
+        return s
     def __repr__(self):
         return self.__str__()
+    def __getattr__(self, attr):
+        if attr in self.props:
+            return self.props[attr]
+        else:
+            raise AttributeError('\'Genome\' object has no attribute \'{}\''.format(attr))
 
 
-# In[49]:
+# In[3]:
 
 
 class GenomeModel(Genome):
@@ -80,7 +85,7 @@ class GenomeModel(Genome):
         """
         if layers and layers[0].ltype != 'input':
             raise Exception('Expected first layer to be of type "input" but instead received "{}"'.format(layers[0].ltype))
-        super(GenomeModel, self).__init__(name=name, layers=layers)
+        super().__init__(name=name, layers=layers)
         
     @staticmethod
     def generate_base(inputs, hidden, outputs, activation='relu', name=None):
@@ -127,14 +132,14 @@ class GenomeModel(Genome):
         return self.__str__()
 
 
-# In[2]:
+# In[24]:
 
 
 class GenomeLayer:
     """
     Represents a layer in a genome model.
     """
-    def __init__(self, units, activation, weights=None, bias=None, ltype='dense', weights_filler='glorot_uniform', bias_filler='glorot_uniform', name=None):
+    def __init__(self, units, activation=None, weights=None, bias=None, ltype='dense', weights_initializer='glorot_uniform', bias_initializer='glorot_uniform', name=None):
         """
         Initiates a genome layer.
         
@@ -142,26 +147,26 @@ class GenomeLayer:
         -----------
         units: int
             The number of units in the layer.
-        activation: string or function
-            The activation function of the layer.
+        activation: string or function, optional
+            The activation function of the layer, this is optional for layers of type `input`.
         weights: array or list, optional
             The connections to the outbounding layer.
         bias: array or list, optional
             The biases of the layer.
         ltype: str, optional
             The type of a keras layer, currently only input/dense are supported.
-        weights_filler: str or function, optional
-            Function used to fill missing connections with the outbounding layer. 
-        bias_filler: str or function, optional
-            Function used to fill missing biases in the current layer.
+        weights_initializer: str or function, optional
+            Function used to initialize or fill missing connections (weights) with the outbounding layer.
+        bias_initializer: str or function, optional
+            Function used to initialize or fill missing biases in the current layer.
         name: str, optional
             The name of the genome layer, later used as the name of the keras layer.
         """
         self.ltype = ltype.lower()
         if self.ltype not in ['input', 'dense']:
             raise Exception('Unsupported type of genome layer received "{}", expected types are input/dense.'.format(self.ltype))
-        self.weights_filler = tf.keras.initializers.get(weights_filler) if type(weights_filler) is str else weights_filler
-        self.bias_filler = tf.keras.initializers.get(bias_filler) if type(bias_filler) is str else bias_filler
+        self.weights_initializer = tf.keras.initializers.get(weights_initializer) if type(weights_initializer) is str else weights_initializer
+        self.bias_initializer = tf.keras.initializers.get(bias_initializer) if type(bias_initializer) is str else bias_initializer
         self.units = units
         self.activation = activation
         self.weights = np.array(weights) if weights else None
@@ -183,13 +188,12 @@ class GenomeLayer:
         out: GenomeLayer
             An input genome layer.
         """
-        return GenomeLayer(units, None, None, None, ltype='input', name=name)
+        return GenomeLayer(units, ltype='input', name=name)
         
     def connect_layer(self, outbound_layer): # Find appropriate name & use
-        import utils
         """
         Naively connect the weights of the current layer to the given outbounding layer.
-        The missing weights are filled using the `weights_filler` function while the unused weights are removed.
+        The missing weights are filled using the `weights_initializer` function while the unused weights are removed.
         
         Parameters
         -----------
@@ -200,9 +204,10 @@ class GenomeLayer:
         --------
         out: None
         """
+        import utils
         new_weights_shape = self.units, outbound_layer.units
         weights = self.weights if self.weights else [[]]
-        new_weights = self.weights_filler(new_weights_shape)
+        new_weights = self.weights_initializer(new_weights_shape)
         self.weights = utils.fill_array(new_weights, weights)
     
     def __str__(self):
@@ -216,8 +221,9 @@ class GenomeLayer:
         return self.__str__()
 
 
-# In[ ]:
+# In[25]:
 
 
-
+inputs = GenomeLayer.create_input(5)
+outputs = GenomeLayer()
 
