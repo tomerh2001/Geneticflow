@@ -11,7 +11,7 @@ import tensorflow as tf
 import numpy as np
 
 
-# In[17]:
+# In[7]:
 
 
 class Base:
@@ -112,9 +112,9 @@ class Base:
             parents_gens = selection(population_gens)
             base_genome = crossover(parents_gens)
             
-            history.append(base_genome)
+            history.append(sorted(population_gens, key = lambda x: x.fitness)[-1])
         
-        self.winner = base_genome
+        self.winner = sorted(population_gens, key = lambda x: x.fitness)[-1]
         return history
 
 
