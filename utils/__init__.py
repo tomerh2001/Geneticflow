@@ -128,6 +128,27 @@ def evenly_combine(objects, select=None):
     return new_objects
 
 
+# In[17]:
+
+
+def is_array_like(obj):
+    """
+    Returns if the given object is of array_like type (i.e. any type that is considered a sequence).
+    
+    Parameters
+    -----------
+    obj: any
+        The object to determine if is of array_like type or not.
+    
+    Returns
+    --------
+    out: bool
+        True if object is array_like and False when object is not array_like
+    """
+    from collections.abc import Sequence
+    return isinstance(obj, (Sequence, np.ndarray)) and not isinstance(obj, (str, bytes, bytearray))
+
+
 # In[ ]:
 
 

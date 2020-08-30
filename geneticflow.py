@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[2]:
 
 
 import tensorflow as tf
@@ -14,12 +14,13 @@ import crossovers
 import genomes
 import algorithms
 import selections
+import mutations
 
 from genomes import Genome # GenomeModel, GenomeLayer, 
 from algorithms import Base, Neat
 
 
-# In[2]:
+# In[3]:
 
 
 # neat = Neat()

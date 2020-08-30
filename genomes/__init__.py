@@ -9,7 +9,7 @@ import numpy as np
 import copy
 
 
-# In[12]:
+# In[8]:
 
 
 class Genome:
@@ -48,6 +48,11 @@ class Genome:
         s = f'<Genome fitness="{self.fitness}"'
         if self.name:
             s += f' name="{self.name}"'
+            
+        for prop in self.props:
+            val = str(self.props[prop]).replace('\n', ' ').replace('\r', '')
+            s+= f' {prop}="{val}"'
+            
         s+= '>'
         return s
     def __repr__(self):
