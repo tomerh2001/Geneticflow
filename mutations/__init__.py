@@ -14,10 +14,15 @@ import string
 import utils
 
 
-# In[147]:
+# In[1]:
 
 
 def get(name):
+    """
+    Returns a mutation by name, this can be a function or a class name, in cases of a class name then an instance of that class will be returned.
+    
+    
+    """
     import inspect
     target = globals()[name]
     return target() if inspect.isclass(target) else target

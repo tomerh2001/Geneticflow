@@ -4,8 +4,7 @@
 # In[7]:
 
 
-import os
-import sys
+import os, sys
 sys.path.append(os.path.realpath('..'))
 
 import tensorflow as tf

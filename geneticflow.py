@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[2]:
+# In[1]:
 
 
 import tensorflow as tf
@@ -20,7 +20,7 @@ from genomes import Genome # GenomeModel, GenomeLayer,
 from algorithms import Base, Neat
 
 
-# In[3]:
+# In[2]:
 
 
 # neat = Neat()
@@ -29,10 +29,27 @@ from algorithms import Base, Neat
 # winner = neat.winner
 
 
-# In[ ]:
+# In[10]:
 
 
+base_genome = Genome(a=1)
 
+def fit_func(genome):
+    genome.fitness += 2
+    return genome
+
+def mutation(genome):
+    return genome
+
+def crossover(genomes):
+    return genomes[0]
+
+def selection(genomes):
+    return genomes[:3]
+
+base = Base()
+base.compile_base(base_genome)
+history = base.fit(fit_func, crossover=crossover, mutation=mutation, selection=selection, verbose=1, fitness_threshold=5, fit_mode='single')
 
 
 # In[ ]:

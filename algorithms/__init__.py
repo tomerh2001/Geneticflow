@@ -11,7 +11,7 @@ import tensorflow as tf
 import numpy as np
 
 
-# In[7]:
+# In[18]:
 
 
 class Base:
@@ -38,12 +38,13 @@ class Base:
         self.base_genome = Genome(base_genome) if type(base_genome) is dict else base_genome
         self.compiled = True
         
-    def fit(self, fit_func, population=100, generations=50, crossover='linear', mutation='mutate_genome', selection=2, elitism=2, fit_mode='multi'):
+    def fit(self, fit_func, population=100, generations=50, crossover='linear', mutation='MutationByType', selection=2, elitism=2, verbose=1, fitness_threshold=None, fit_mode='single'):
         """
         Using a basic genetic algorithm to search for the best genome for a specific problem.
         The problem is defined by the fitness function (fit_func) and it is used to determine the "goal" of the process.
         
         The process of generations is comprised from the following steps: population, evaluation, selection and crossover.
+        
         population: Creating clones of a genome each with a diffrent mutation.
         evalutation: Evaluating a genome, this is determined by the `genome.fitness` parameter of the genome returned from the `fit_func`.
         selection: The function used to select which genomes would continue on to breed.
@@ -67,10 +68,17 @@ class Base:
             The function used to select which genomes would be passed to the `crossover` function, if an integer is passed then the top x (where x is the given integer) genomes with the highest fitness would be selected.
         elitism: int, optional
             Allow number of the best genomes from the current generation to carry over to the next, unaltered.
+        verbose: int, optional
+            The verbosity mode, expected values are 0, 1, or 2.
+            0 = silent.
+            1 = generation + best genome.
+            2 = generation + highest fitness.
+        fitness_threshold: int, optional
+            A threshold for the evolution process, when the threshold has been reached the process will be terminated. 
         fit_mode: str, optional
-            Expected values are: "single"/"multi".
-            multi: Indicates to pass a list of all the population genomes into `fit_func`, this means the signature of the function must be: func(genomes: list[Genome]) -> list[Genome]
-            single: Indicates to pass each genome individually to the `fit_func`, this means the signature of the function must be: func(genome: Genome) -> Genome
+            The fit mode, expected values are single or multi.
+            multi = Indicates to pass a list of all the population genomes into `fit_func`, this means the signature of the function must be: func(genomes: list[Genome]) -> list[Genome]
+            single = Indicates to pass each genome individually to the `fit_func`, this means the signature of the function must be: func(genome: Genome) -> Genome
             
         Returns
         --------
@@ -78,6 +86,7 @@ class Base:
             The history of the evolution process.
         """
         import crossovers, mutations, selections
+        from genomes import Genome
         
         if type(crossover) is str:
             crossover = crossovers.get(crossover)
@@ -106,15 +115,40 @@ class Base:
             else:
                 raise Exception('Got unexpected fit_mode: {}.'.format(fit_mode))
             
-            print('Gen {} highest fitness: {}'.format(generation, max(map(lambda x: x.fitness, population_gens))))
+            sorted_population_gens = sorted(population_gens, key = lambda x: x.fitness)
+            
+            if not isinstance(population_gens[0], Genome):
+                if fit_mode == 'single':
+                    raise Exception('Unexpected return type of fit_func, got {} but expected Genome.'.format(type(population_gens[0])))
+                elif fit_mode == 'mutli':
+                    raise Exception('Unexpected return type of fit_func, got list[{}] but expected list[Genome].'.format(type(population_gens[0])))
+            
+            if verbose == 1:
+                print('Gen {} best genome: {}'.format(generation, sorted_population_gens[-1]))
+            elif verbose == 2:
+                print('Gen {} highest fitness: {}'.format(generation, max(map(lambda x: x.fitness, population_gens))))
+            elif verbose != 0:
+                raise Exception('Unexpected verbose value, got {} but expected values are 0/1/2'.format(verbose))
 
-            elitism_gens = sorted(population_gens, key=lambda g:g.fitness)[-elitism:]
+            elitism_gens = sorted_population_gens[-elitism:]
             parents_gens = selection(population_gens)
+            
+            if not isinstance(parents_gens, list):
+                raise Exception('Unexpected return type of selection, got {} but expected list[Genome].'.format(type(parents_gens)))                
+            elif not isinstance(parents_gens[0], Genome):
+                raise Exception('Unexpected return type of selection, got list[{}] but expected list[Genome].'.format(type(parents_gens[0])))
+
             base_genome = crossover(parents_gens)
             
-            history.append(sorted(population_gens, key = lambda x: x.fitness)[-1])
+            if not isinstance(base_genome, Genome):
+                raise Exception('Unexpected return type of crossover, got {} but expected Genome.'.format(type(base_genome)))
+            
+            history.append(sorted_population_gens[-1])
+            
+            if fitness_threshold and sorted_population_gens[-1].fitness >= fitness_threshold:
+                break
         
-        self.winner = sorted(population_gens, key = lambda x: x.fitness)[-1]
+        self.winner = sorted_population_gens[-1]
         return history
 
 
@@ -185,7 +219,7 @@ class Neat(Base):
         self.biases_change_rate = biases_change_rate
         super().compile_base(base_genome=base_genome)
         
-    def fit(self, fit_func, population=100, generations=50, crossover=None, mutation=None, selection=None, fit_mode='multi'):
+    def fit(self, fit_func, population=100, generations=50, crossover=None, mutation=None, selection=None, verbose=2, fit_mode='multi'):
         """
         Using the NEAT algorithm to search for the best neural network for a specific problem.
         The problem is defined by the fitness function (fit_func) and it is used to determine the "goal" of the process.

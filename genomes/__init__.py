@@ -1,15 +1,20 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[14]:
+# In[15]:
 
+
+import os, sys
+sys.path.append(os.path.realpath('..'))
 
 import tensorflow as tf
 import numpy as np
 import copy
 
+import utils
 
-# In[8]:
+
+# In[2]:
 
 
 class Genome:
@@ -42,7 +47,17 @@ class Genome:
         out: list
             A list of genomes.
         """
-        return [mutation(self.clone()) for i in range(population)]
+        from genomes import Genome
+        pop = []
+        
+        for i in range(population):
+            x = mutation(self.clone())
+            pop.append(x)
+            
+            if not isinstance(x, Genome):
+                raise Exception('Unexpected return type of mutation, got {} but expected Genome.'.format(type(x)))
+                
+        return pop
         
     def __str__(self):
         s = f'<Genome fitness="{self.fitness}"'
@@ -64,66 +79,129 @@ class Genome:
             raise AttributeError('\'Genome\' object has no attribute \'{}\''.format(attr))
 
 
-# In[62]:
+# In[ ]:
+
+
+
+
+
+# In[11]:
 
 
 class GenomeNode:
     def __init__(self):
-        self.outputs = []
+        self.connections = []
     
-    def connect_layer(self, layer):
-        self.outputs.append(layer)
+    def connect(self, targets):
+        """
+        Connect the current node to another node.
+        
+        A node cannot be connected to the same node twice, in an attempt to connect two nodes that are already connected an exception will be raised.
+        
+        Parameters
+        -----------
+        targets: GenomeNode, list[GenomeNode]
+            The targets add to the current node's connections.
+        
+        Returns
+        --------
+        out: None
+        """
+        if utils.is_array_like(targets):
+            for target in targets:
+                if target not in self.connections:
+                    self.connections.append(target)
+                else:
+                    raise Exception('{} is in the current node\'s connections.')
+        else:
+            if targets not in self.connections:
+                self.connections.append(targets)
+            else:
+                raise Exception('{} is in the current node\'s connections.')
+                
+    def to_layer(self):
+        """
+        Returns a keras layer object corresponding with the current node.
+        
+        In cases where the current instance is of GenomeInputNode type, the return value will be an input Tensor.
+
+        Returns
+        --------
+        out: keras.layers.Layer or Tensor
+        """
+        raise Exception('You are trying to convert a default GenomeNode into a keras layer, this is not an option, instead try using GenomeInputNode, GenomeDenseNode, etc.')
     
-    def __str__(self):
-        return f'<{type(self).__name__}>'
-    def __repr__(self):
-        return self.__str__()
+    @staticmethod
+    def connect_nodes(nodes, targets):
+        """
+        Connect a list of nodes to target nodes.
+        
+        Parameters
+        -----------
+        nodes: list[GenomeNode]
+            A list of nodes to connect to targets.
+        targets: GenomeNode or list[GenomeNode]
+            The target nodes to connect each node in the list of nodes to.
+            
+        Returns
+        --------
+        out: None
+        """
+        for node in nodes:
+            node.connect(targets)
+    
+    @staticmethod
+    def create_inputs(inputs):
+        """
+        Creates a list of GenomeInputNode.
+        
+        Parameters
+        -----------
+        inputs: int
+            The number of inputs nodes to create.
+        
+        Returns
+        --------
+        out: list[GenomeInputNode]
+            A list of input nodes.
+        """
+        return [GenomeInputNode() for i in range(inputs)]
 
 
-# In[64]:
+# In[4]:
 
 
 class GenomeInputNode(GenomeNode):
-    def __init__(self):
-        super().__init__()
-        
-    def to_layer(self, shape=1):
-        return tf.keras.layers.InputLayer(shape)
+    def to_layer(self):
+        return tf.keras.layers.Input(1)
+
+GenomeInputNode.to_layer.__doc__ = GenomeNode.to_layer.__doc__
 
 
-# In[65]:
+# In[5]:
 
 
 class GenomeDenseNode(GenomeNode):
     def __init__(self, activation='relu'):
-        super().__init__()
         self.activation = activation
         
     def to_layer(self):
         return tf.keras.layers.Dense(1, self.activation)
 
-
-# In[69]:
-
-
-# input1 = GenomeInputNode()
-# output1 = GenomeDenseNode()
-
-# input1.connect_layer(output1)
-
-# input1.outputs
+GenomeDenseNode.to_layer.__doc__ = GenomeNode.to_layer.__doc__
 
 
 # In[ ]:
 
 
-# # Option 1
-# # Connect all nodes to target nodes
-# # Target can be a layer or a single node.
-# inputs.connect_layer(hidden)
 
-# # Option 2
-# # Connect node i to target nodes
-# # Target can be a layer or a single node.
-# inputs.nodes[i].connect_node(hidden)
+
+
+# In[17]:
+
+
+inputs = GenomeNode.create_inputs(4)
+outputs = [GenomeDenseNode('relu') for i in range(3)]
+
+GenomeNode.connect_nodes(inputs, outputs)
 
