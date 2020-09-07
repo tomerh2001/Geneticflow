@@ -11,7 +11,7 @@ import tensorflow as tf
 import numpy as np
 
 
-# In[18]:
+# In[3]:
 
 
 class Base:
@@ -38,7 +38,7 @@ class Base:
         self.base_genome = Genome(base_genome) if type(base_genome) is dict else base_genome
         self.compiled = True
         
-    def fit(self, fit_func, population=100, generations=50, crossover='linear', mutation='MutationByType', selection=2, elitism=2, verbose=1, fitness_threshold=None, fit_mode='single'):
+    def fit(self, fit_func, population=100, generations=50, crossover='EvenlyCombine', mutation='MutationByType', selection=2, elitism=2, verbose=1, fitness_threshold=None, fit_mode='single'):
         """
         Using a basic genetic algorithm to search for the best genome for a specific problem.
         The problem is defined by the fitness function (fit_func) and it is used to determine the "goal" of the process.
@@ -59,12 +59,13 @@ class Base:
         population: int, optional
             The number of genomes to generate each generation.
         generations: int, optional
-            The number of generations to run the program for.
-        crossover: str or func(genomes: list[Genome]) -> Genome, optional
+            The number of generations to run the evolution process.
+        crossover: str or Crossover or func(genomes: list[Genome]) -> Genome, [optional, default='EvenlyCombine']
             The function used to determine how to breed the genomes, the function must take a list of genomes and return a single genome.
-        mutation: str or func(genome: Genome) -> Genome, optional
+        mutation: str or Mutation or func(genome: Genome) -> Genome, [optional, default='MutationByType']
             The function used to mutate a genome, the function must take a genome and return a mutated version of that genome.
-        selection: str or int or func(genomes: list[Genome]) -> list[Genome], optional
+        selection: str or int or func(genomes: list[Genome]) -> list[Genome], [optional, default='Top(parents=2)']
+            Selection is the stage of a genetic algorithm in which individual genomes are chosen from a population for later breeding (using the crossover operator). 
             The function used to select which genomes would be passed to the `crossover` function, if an integer is passed then the top x (where x is the given integer) genomes with the highest fitness would be selected.
         elitism: int, optional
             Allow number of the best genomes from the current generation to carry over to the next, unaltered.
@@ -96,7 +97,7 @@ class Base:
             selection = selections.get(selection)
         elif type(selection) is int:
             parents = selection
-            selection = lambda population_gens: selections.top(population_gens, parents)
+            selection = selections.Top(parents=parents)
         
         base_genome = self.base_genome
         elitism_gens = []

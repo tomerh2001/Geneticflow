@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[33]:
+# In[1]:
 
 
 import os, sys
@@ -14,21 +14,28 @@ import string
 import utils
 
 
-# In[1]:
+# In[6]:
 
 
 def get(name):
     """
     Returns a mutation by name, this can be a function or a class name, in cases of a class name then an instance of that class will be returned.
     
+    Parameters
+    -----------
+    name: str
+        The name of the function or class.
     
+    Returns
+    --------
+    out: function or instance of `Mutation`.
     """
     import inspect
     target = globals()[name]
     return target() if inspect.isclass(target) else target
 
 
-# In[5]:
+# In[19]:
 
 
 class Mutation:
@@ -37,16 +44,18 @@ class Mutation:
     
     A mutation is a callable object (much like a function) which takes a `Genome` object as an input and outputs a mutated genome.
     
-    Users will just instantiate a mutation and then treat it as a callable (function).
+    The mutation function of the `Mutation` class is defined within the `call` function.
+    
+    Users will just instantiate an instance and then treat it as a callable (function).
     """
-    def mutate(self, genome):
+    def call(self, genome):
         raise Exception('You are trying to invoke the default mutation function of the `Mutation` class, this function is not defined.')
     
     def __call__(self, genome):
-        return self.mutate(genome)
+        return self.call(genome)
 
 
-# In[7]:
+# In[18]:
 
 
 class MutationByType(Mutation):
@@ -78,7 +87,7 @@ class MutationByType(Mutation):
         self.funcs[str] = str_func if str_func else mutate_string
         if other_func: self.funcs = {**self.funcs, **other_func}
         
-    def mutate(self, genome):
+    def call(self, genome):
         """
         Applying the given functions on each property of the genome depending on it's type.
         
@@ -108,7 +117,13 @@ class MutationByType(Mutation):
         return genome
 
 
-# In[1]:
+# In[ ]:
+
+
+
+
+
+# In[13]:
 
 
 def mutate_string(text, change_rate=0.5, change_length_rate=0.3, add_rate=0.5, chars=None):
@@ -148,7 +163,7 @@ def mutate_string(text, change_rate=0.5, change_length_rate=0.3, add_rate=0.5, c
     return text
 
 
-# In[152]:
+# In[14]:
 
 
 def mutate_int(x):
@@ -168,7 +183,7 @@ def mutate_int(x):
     return np.random.randint(0, (x*2) + 1)
 
 
-# In[151]:
+# In[15]:
 
 
 def mutate_float(x):
@@ -188,7 +203,7 @@ def mutate_float(x):
     return np.random.uniform(0, (x*2) + 1)
 
 
-# In[11]:
+# In[16]:
 
 
 def mutate_array_like(x):

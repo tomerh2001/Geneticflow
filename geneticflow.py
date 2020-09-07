@@ -29,27 +29,18 @@ from algorithms import Base, Neat
 # winner = neat.winner
 
 
-# In[10]:
+# In[7]:
 
 
 base_genome = Genome(a=1)
 
 def fit_func(genome):
-    genome.fitness += 2
+    genome.fitness = genome.a
     return genome
-
-def mutation(genome):
-    return genome
-
-def crossover(genomes):
-    return genomes[0]
-
-def selection(genomes):
-    return genomes[:3]
 
 base = Base()
 base.compile_base(base_genome)
-history = base.fit(fit_func, crossover=crossover, mutation=mutation, selection=selection, verbose=1, fitness_threshold=5, fit_mode='single')
+history = base.fit(fit_func)
 
 
 # In[ ]:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[15]:
+# In[6]:
 
 
 import os, sys
@@ -14,13 +14,26 @@ import copy
 import utils
 
 
-# In[2]:
+# In[8]:
 
 
 class Genome:
     """
     Represents a genome. Used to hold the "DNA" of an object.
     This is the base class for all other genomes.
+    
+    Examples
+    ---------
+    >>> # Create a genome with the properties {a = 1, b = 2, c = 3}
+    >>> gen = Genome(a=1, b=2, c=3)
+    <Genome fitness="0" a="1" b="2" c="3">
+    
+    >>> # Access the genome property `a`
+    >>> gen.a
+    >>> 1
+    
+    >>> # Access and change the genome fitness
+    >>> gen.fitness = 50
     """
     def __init__(self, name=None, **props):
         self.name = name
@@ -59,14 +72,15 @@ class Genome:
                 
         return pop
         
-    def __str__(self):
+    def __str__(self, with_props=True):
         s = f'<Genome fitness="{self.fitness}"'
         if self.name:
             s += f' name="{self.name}"'
-            
-        for prop in self.props:
-            val = str(self.props[prop]).replace('\n', ' ').replace('\r', '')
-            s+= f' {prop}="{val}"'
+        
+        if with_props:
+            for prop in self.props:
+                val = str(self.props[prop]).replace('\n', ' ').replace('\r', '')
+                s+= f' {prop}="{val}"'
             
         s+= '>'
         return s
@@ -79,13 +93,7 @@ class Genome:
             raise AttributeError('\'Genome\' object has no attribute \'{}\''.format(attr))
 
 
-# In[ ]:
-
-
-
-
-
-# In[11]:
+# In[15]:
 
 
 class GenomeNode:
@@ -118,6 +126,12 @@ class GenomeNode:
                 self.connections.append(targets)
             else:
                 raise Exception('{} is in the current node\'s connections.')
+    
+    def remove_connections(self):
+        """
+        Removes all connections of the current node.
+        """
+        del self.connections[:]
                 
     def to_layer(self):
         """
@@ -130,45 +144,9 @@ class GenomeNode:
         out: keras.layers.Layer or Tensor
         """
         raise Exception('You are trying to convert a default GenomeNode into a keras layer, this is not an option, instead try using GenomeInputNode, GenomeDenseNode, etc.')
-    
-    @staticmethod
-    def connect_nodes(nodes, targets):
-        """
-        Connect a list of nodes to target nodes.
-        
-        Parameters
-        -----------
-        nodes: list[GenomeNode]
-            A list of nodes to connect to targets.
-        targets: GenomeNode or list[GenomeNode]
-            The target nodes to connect each node in the list of nodes to.
-            
-        Returns
-        --------
-        out: None
-        """
-        for node in nodes:
-            node.connect(targets)
-    
-    @staticmethod
-    def create_inputs(inputs):
-        """
-        Creates a list of GenomeInputNode.
-        
-        Parameters
-        -----------
-        inputs: int
-            The number of inputs nodes to create.
-        
-        Returns
-        --------
-        out: list[GenomeInputNode]
-            A list of input nodes.
-        """
-        return [GenomeInputNode() for i in range(inputs)]
 
 
-# In[4]:
+# In[16]:
 
 
 class GenomeInputNode(GenomeNode):
@@ -178,7 +156,7 @@ class GenomeInputNode(GenomeNode):
 GenomeInputNode.to_layer.__doc__ = GenomeNode.to_layer.__doc__
 
 
-# In[5]:
+# In[17]:
 
 
 class GenomeDenseNode(GenomeNode):
@@ -191,17 +169,84 @@ class GenomeDenseNode(GenomeNode):
 GenomeDenseNode.to_layer.__doc__ = GenomeNode.to_layer.__doc__
 
 
-# In[ ]:
+# In[18]:
 
 
+class GenomeLayer:
+    def __init__(self, nodes=1):
+        self.nodes = [self.create_node() for i in range(nodes)]
+        
+    def connect(self, targets):
+        """
+        Connects all nodes of the current layer to all nodes of another layer.
+        
+        Parameters
+        -----------
+        targets: GenomeLayer
+            A layer to connect all the nodes of the current layer to.
+            
+        Returns
+        --------
+        out: None
+        """
+        for node in self.nodes:
+            for target_node in targets.nodes:
+                node.connect(target_node)
+    
+    def create_node(self):
+        """
+        Creates and returns a new node based on the current layer (i.e. GenomeDenseLayer will return a GenomeDenseNode while GenomeInputLayer will return a GenomeInputNode).
+        
+        Returns
+        --------
+        out: GenomeNode
+            A node based on the type of the layer.
+        """
+        raise Exception('You are trying to use the GenomeLayer class directly, this is not an option, please check out GenomeInputLayer, GenomeDenseLayer, etc instead.')
 
 
+# In[7]:
 
-# In[17]:
+
+class GenomeInputLayer(GenomeLayer):
+    def __init__(self, inputs=1):
+        super().__init__(inputs)
+        
+    def create_node(self):
+        return GenomeInputNode()
 
 
-inputs = GenomeNode.create_inputs(4)
-outputs = [GenomeDenseNode('relu') for i in range(3)]
+# In[8]:
 
-GenomeNode.connect_nodes(inputs, outputs)
+
+class GenomeDenseLayer(GenomeLayer):
+    def __init__(self, nodes=1, activation='relu'):
+        self.activation = activation
+        super().__init__(nodes)
+        
+    def create_node(self):
+        return GenomeDenseNode(self.activation)
+
+
+# In[19]:
+
+
+class GenomePCNN(Genome):
+    def __init__(self, inputs, outputs, name=None):
+        super().__init__(name=name, layers=[])
+        input_layer, output_layer = GenomeInputLayer(inputs), GenomeDenseLayer(outputs)
+        self.layers.extend([input_layer, output_layer])
+        
+    def __str__(self):
+        return super().__str__(False)
+
+
+# In[23]:
+
+
+model = GenomePCNN(inputs=4, outputs=4)
+
+# model.add_hidden_layer(1, 'relu')
+
+model.layers
 
