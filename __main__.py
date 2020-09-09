@@ -29,18 +29,18 @@ from algorithms import Base, Neat
 # winner = neat.winner
 
 
-# In[7]:
+# In[3]:
 
 
-base_genome = Genome(a=1)
+# base_genome = Genome(a=1)
 
-def fit_func(genome):
-    genome.fitness = genome.a
-    return genome
+# def fit_func(genome):
+#     genome.fitness = genome.a
+#     return genome
 
-base = Base()
-base.compile_base(base_genome)
-history = base.fit(fit_func)
+# base = Base()
+# base.compile_base(base_genome)
+# history = base.fit(fit_func)
 
 
 # In[ ]:

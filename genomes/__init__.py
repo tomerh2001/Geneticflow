@@ -1,20 +1,18 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[6]:
+# In[18]:
 
 
 import os, sys
 sys.path.append(os.path.realpath('..'))
 
-import tensorflow as tf
-import numpy as np
 import copy
 
 import utils
 
 
-# In[8]:
+# In[19]:
 
 
 class Genome:
@@ -93,10 +91,21 @@ class Genome:
             raise AttributeError('\'Genome\' object has no attribute \'{}\''.format(attr))
 
 
-# In[15]:
+# In[ ]:
+
+
+
+
+
+# In[43]:
 
 
 class GenomeNode:
+    """
+    This is the base class for all nodes in a partially connected neural network (PCNN).
+    
+    Nodes can be connected to any other node in the PCNN, each connection is stored along with the weights and biases.
+    """
     def __init__(self):
         self.connections = []
     
@@ -127,11 +136,28 @@ class GenomeNode:
             else:
                 raise Exception('{} is in the current node\'s connections.')
     
-    def remove_connections(self):
+    def remove_all_connections(self):
         """
         Removes all connections of the current node.
         """
         del self.connections[:]
+    
+    def remove_connection(self, node):
+        """
+        Removes the given node from the current node's connections, including the associated weights and biases.
+        
+        Parameters
+        -----------
+        node: GenomeNode
+            The node to remove from the connections of the current node.
+            
+        Returns
+        --------
+        out: None
+        """
+        if not issubclass(type(node), GenomeNode):
+            raise Exception('Expected node to be of type GenomeNode, instead received {}'.format(type(node)))
+        self.connections.remove(node)
                 
     def to_layer(self):
         """
@@ -146,20 +172,32 @@ class GenomeNode:
         raise Exception('You are trying to convert a default GenomeNode into a keras layer, this is not an option, instead try using GenomeInputNode, GenomeDenseNode, etc.')
 
 
-# In[16]:
+# In[21]:
 
 
 class GenomeInputNode(GenomeNode):
+    """
+    An input node in a partially connected neural netowrk (PCNN).
+    
+    This is used to represent a keras input layer with a single unit.
+    """
     def to_layer(self):
         return tf.keras.layers.Input(1)
 
 GenomeInputNode.to_layer.__doc__ = GenomeNode.to_layer.__doc__
 
 
-# In[17]:
+# In[22]:
 
 
 class GenomeDenseNode(GenomeNode):
+    """
+    A dense node in a partially connected neural netowrk (PCNN).
+    
+    Unlike a Dense layer in keras, this class represents a single node (dense layer with a single unit) that is'nt densly connected to all the following nodes, but rather partially connected, meaning that the node can be connected to any other node in the entire network.
+    
+    This is the base node used in the PCNN.
+    """
     def __init__(self, activation='relu'):
         self.activation = activation
         
@@ -169,10 +207,15 @@ class GenomeDenseNode(GenomeNode):
 GenomeDenseNode.to_layer.__doc__ = GenomeNode.to_layer.__doc__
 
 
-# In[18]:
+# In[23]:
 
 
 class GenomeLayer:
+    """
+    This is the base class for all layers in a partially connected neural network (PCNN).
+    
+    Each layer contains nodes (instances of `GenomeNode`).
+    """
     def __init__(self, nodes=1):
         self.nodes = [self.create_node() for i in range(nodes)]
         
@@ -205,10 +248,17 @@ class GenomeLayer:
         raise Exception('You are trying to use the GenomeLayer class directly, this is not an option, please check out GenomeInputLayer, GenomeDenseLayer, etc instead.')
 
 
-# In[7]:
+# In[28]:
 
 
 class GenomeInputLayer(GenomeLayer):
+    """
+    An input layer in a partially connected neural netowrk (PCNN).
+    
+    A GenomeInputLayer contains a list of GenomeInputNode instances.
+    
+    This is usually the first layer in a PCNN.
+    """
     def __init__(self, inputs=1):
         super().__init__(inputs)
         
@@ -216,37 +266,43 @@ class GenomeInputLayer(GenomeLayer):
         return GenomeInputNode()
 
 
-# In[8]:
+# In[29]:
 
 
-class GenomeDenseLayer(GenomeLayer):
-    def __init__(self, nodes=1, activation='relu'):
-        self.activation = activation
-        super().__init__(nodes)
-        
-    def create_node(self):
-        return GenomeDenseNode(self.activation)
 
 
-# In[19]:
+
+# In[37]:
 
 
 class GenomePCNN(Genome):
-    def __init__(self, inputs, outputs, name=None):
-        super().__init__(name=name, layers=[])
-        input_layer, output_layer = GenomeInputLayer(inputs), GenomeDenseLayer(outputs)
-        self.layers.extend([input_layer, output_layer])
+    """
+    Partially Connected Neural Netowrk (PCNN).
+    
+    This class is used as a genome of a NN model for the NEAT algorithm.
+    
+    To convert an instance into a keras model use the `.to_model` function.
+    """
+    def __init__(self, layers, name=None):
+        for layer in layers:
+            if not issubclass(type(layer), GenomeLayer):
+                raise Exception('Layers of PCNN must be of type GenomeLayer. (received {})'.format(type(layer)))
         
+        super().__init__(name=name, layers=layers)
+
     def __str__(self):
         return super().__str__(False)
 
 
-# In[23]:
+# In[ ]:
 
 
-model = GenomePCNN(inputs=4, outputs=4)
+model = GenomePCNN.create_base(4, 4)
+model.layers[0].nodes[0].connections
 
-# model.add_hidden_layer(1, 'relu')
 
-model.layers
+# In[ ]:
+
+
+
 
