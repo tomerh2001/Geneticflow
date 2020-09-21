@@ -1,18 +1,20 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[18]:
+# In[1]:
 
 
 import os, sys
 sys.path.append(os.path.realpath('..'))
 
 import copy
+import inspect
+from tensorflow.keras import initializers
 
 import utils
 
 
-# In[19]:
+# In[2]:
 
 
 class Genome:
@@ -97,208 +99,76 @@ class Genome:
 
 
 
-# In[43]:
+# In[3]:
 
 
-class GenomeNode:
-    """
-    This is the base class for all nodes in a partially connected neural network (PCNN).
-    
-    Nodes can be connected to any other node in the PCNN, each connection is stored along with the weights and biases.
-    """
-    def __init__(self):
-        self.connections = []
-    
-    def connect(self, targets):
-        """
-        Connect the current node to another node.
-        
-        A node cannot be connected to the same node twice, in an attempt to connect two nodes that are already connected an exception will be raised.
-        
-        Parameters
-        -----------
-        targets: GenomeNode, list[GenomeNode]
-            The targets add to the current node's connections.
-        
-        Returns
-        --------
-        out: None
-        """
-        if utils.is_array_like(targets):
-            for target in targets:
-                if target not in self.connections:
-                    self.connections.append(target)
-                else:
-                    raise Exception('{} is in the current node\'s connections.')
-        else:
-            if targets not in self.connections:
-                self.connections.append(targets)
-            else:
-                raise Exception('{} is in the current node\'s connections.')
-    
-    def remove_all_connections(self):
-        """
-        Removes all connections of the current node.
-        """
-        del self.connections[:]
-    
-    def remove_connection(self, node):
-        """
-        Removes the given node from the current node's connections, including the associated weights and biases.
-        
-        Parameters
-        -----------
-        node: GenomeNode
-            The node to remove from the connections of the current node.
-            
-        Returns
-        --------
-        out: None
-        """
-        if not issubclass(type(node), GenomeNode):
-            raise Exception('Expected node to be of type GenomeNode, instead received {}'.format(type(node)))
-        self.connections.remove(node)
-                
-    def to_layer(self):
-        """
-        Returns a keras layer object corresponding with the current node.
-        
-        In cases where the current instance is of GenomeInputNode type, the return value will be an input Tensor.
-
-        Returns
-        --------
-        out: keras.layers.Layer or Tensor
-        """
-        raise Exception('You are trying to convert a default GenomeNode into a keras layer, this is not an option, instead try using GenomeInputNode, GenomeDenseNode, etc.')
-
-
-# In[21]:
-
-
-class GenomeInputNode(GenomeNode):
-    """
-    An input node in a partially connected neural netowrk (PCNN).
-    
-    This is used to represent a keras input layer with a single unit.
-    """
-    def to_layer(self):
-        return tf.keras.layers.Input(1)
-
-GenomeInputNode.to_layer.__doc__ = GenomeNode.to_layer.__doc__
-
-
-# In[22]:
-
-
-class GenomeDenseNode(GenomeNode):
-    """
-    A dense node in a partially connected neural netowrk (PCNN).
-    
-    Unlike a Dense layer in keras, this class represents a single node (dense layer with a single unit) that is'nt densly connected to all the following nodes, but rather partially connected, meaning that the node can be connected to any other node in the entire network.
-    
-    This is the base node used in the PCNN.
-    """
-    def __init__(self, activation='relu'):
-        self.activation = activation
-        
-    def to_layer(self):
-        return tf.keras.layers.Dense(1, self.activation)
-
-GenomeDenseNode.to_layer.__doc__ = GenomeNode.to_layer.__doc__
-
-
-# In[23]:
-
-
-class GenomeLayer:
-    """
-    This is the base class for all layers in a partially connected neural network (PCNN).
-    
-    Each layer contains nodes (instances of `GenomeNode`).
-    """
-    def __init__(self, nodes=1):
-        self.nodes = [self.create_node() for i in range(nodes)]
-        
-    def connect(self, targets):
-        """
-        Connects all nodes of the current layer to all nodes of another layer.
-        
-        Parameters
-        -----------
-        targets: GenomeLayer
-            A layer to connect all the nodes of the current layer to.
-            
-        Returns
-        --------
-        out: None
-        """
-        for node in self.nodes:
-            for target_node in targets.nodes:
-                node.connect(target_node)
-    
-    def create_node(self):
-        """
-        Creates and returns a new node based on the current layer (i.e. GenomeDenseLayer will return a GenomeDenseNode while GenomeInputLayer will return a GenomeInputNode).
-        
-        Returns
-        --------
-        out: GenomeNode
-            A node based on the type of the layer.
-        """
-        raise Exception('You are trying to use the GenomeLayer class directly, this is not an option, please check out GenomeInputLayer, GenomeDenseLayer, etc instead.')
+class NodeConnection:
+    def __init__(self, input_node, output_node, w, b=None):
+        self.input_node = input_node
+        self.output_node = output_node
+        self.w = w
+        self.b = b
 
 
 # In[28]:
 
 
-class GenomeInputLayer(GenomeLayer):
-    """
-    An input layer in a partially connected neural netowrk (PCNN).
-    
-    A GenomeInputLayer contains a list of GenomeInputNode instances.
-    
-    This is usually the first layer in a PCNN.
-    """
-    def __init__(self, inputs=1):
-        super().__init__(inputs)
+class InputNode:
+    def __init__(self, w_initializer='glorot_uniform'):
+        self.connections = []
         
-    def create_node(self):
-        return GenomeInputNode()
+        if type(w_initializer) is str:
+            self.w_initializer = initializers.get(w_initializer)
+        elif inspect.isfunction(w_initializer):
+            self.w_initializer = w_initializer
+        else:
+            raise Exception('Expected w_initializer to be either a function or a function name, instead got {}.'.format(type(w_initializer)))
+            
+    def connect(self, node):
+        if not isinstance(node, DenseNode):
+            raise Exception('Node must be of type DenseNode, instead got {}.'.format(type(node)))
+        elif node == self:
+            raise Exception('An attempt to connect a node to itself has been made.')
+        elif node in [c.output_node for c in self.connections]:
+            raise Exception('An attempt to connect two nodes that are already connected has been made.')
+        else:
+            w = self.w_initializer([1])
+            self.connections.append(NodeConnection(self, node, w))
 
 
 # In[29]:
 
 
-
-
-
-# In[37]:
-
-
-class GenomePCNN(Genome):
-    """
-    Partially Connected Neural Netowrk (PCNN).
-    
-    This class is used as a genome of a NN model for the NEAT algorithm.
-    
-    To convert an instance into a keras model use the `.to_model` function.
-    """
-    def __init__(self, layers, name=None):
-        for layer in layers:
-            if not issubclass(type(layer), GenomeLayer):
-                raise Exception('Layers of PCNN must be of type GenomeLayer. (received {})'.format(type(layer)))
+class DenseNode(InputNode):
+    def __init__(self, activation='relu', w_initializer='glorot_uniform', b_initializer='zeros'):
+        super().__init__(w_initializer)
         
-        super().__init__(name=name, layers=layers)
-
-    def __str__(self):
-        return super().__str__(False)
+        if type(b_initializer) is str:
+            self.b_initializer = initializers.get(b_initializer)
+        elif inspect.isfunction(b_initializer):
+            self.b_initializer = b_initializer
+        else:
+            raise Exception('Expected b_initializer to be either a function or a function name, instead got {}.'.format(type(b_initializer)))
+            
+        self.activation = activation
+        
+    def connect(self, node):
+        if not isinstance(node, DenseNode):
+            raise Exception('Node must be of type DenseNode, instead got {}.'.format(type(node)))
+        elif node == self:
+            raise Exception('An attempt to connect a node to itself has been made.')
+        elif node in [c.output_node for c in self.connections]:
+            raise Exception('An attempt to connect two nodes that are already connected has been made.')
+        else:
+            w = self.w_initializer([1])
+            b = self.b_initializer([1])
+            self.connections.append(NodeConnection(self, node, w, b))
 
 
 # In[ ]:
 
 
-model = GenomePCNN.create_base(4, 4)
-model.layers[0].nodes[0].connections
+
 
 
 # In[ ]:
