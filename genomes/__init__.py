@@ -110,7 +110,7 @@ class NodeConnection:
         self.b = b
 
 
-# In[28]:
+# In[4]:
 
 
 class InputNode:
@@ -136,7 +136,7 @@ class InputNode:
             self.connections.append(NodeConnection(self, node, w))
 
 
-# In[29]:
+# In[5]:
 
 
 class DenseNode(InputNode):
@@ -165,14 +165,44 @@ class DenseNode(InputNode):
             self.connections.append(NodeConnection(self, node, w, b))
 
 
+# In[6]:
+
+
+class GenomePCNN(Genome):
+    def __init__(self, inputs, outputs, name=None):
+        for node in inputs:
+            if not isinstance(node, InputNode):
+                raise Exception('All inputs must be of type InputNode, instead got {}.'.format(type(node)))
+                
+        for node in outputs:
+            if not isinstance(node, DenseNode):
+                raise Exception('All outputs must be of type DenseNode, instead got {}.'.format(type(node)))
+        
+        super().__init__(name=name, inputs=inputs, outputs=outputs)
+        
+    @staticmethod
+    def create_blank(inputs, outputs, name=None):
+        input_nodes = [InputNode() for i in range(inputs)]
+        output_nodes = [DenseNode() for i in range(outputs)]
+        
+        for input_node in input_nodes:
+            for output_node in output_nodes:
+                if utils.chance(.5):
+                    input_node.connect(output_node)
+                    
+        return GenomePCNN(input_nodes, output_nodes, name=name)
+    
+    def __str__(self, with_props=True):
+        s = f'<GenomePCNN fitness="{self.fitness}"'
+        if self.name:
+            s += f' name="{self.name}"'
+        s+= f' inputs="{len(self.inputs)}" outputs="{len(self.outputs)}">'
+        return s
+
+
 # In[ ]:
 
 
-
-
-
-# In[ ]:
-
-
-
+model = GenomePCNN.create_blank(3, 3)
+model.inputs
 
