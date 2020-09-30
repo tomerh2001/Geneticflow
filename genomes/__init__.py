@@ -9,6 +9,7 @@ sys.path.append(os.path.realpath('..'))
 
 import copy
 import inspect
+from tensorflow import keras
 from tensorflow.keras import initializers
 
 import utils
@@ -110,12 +111,12 @@ class NodeConnection:
         self.b = b
 
 
-# In[4]:
+# In[22]:
 
 
 class InputNode:
-    def __init__(self, w_initializer='glorot_uniform'):
-        self.connections = []
+    def __init__(self, w_initializer='glorot_uniform', name=None):
+        self.connections = { 'inputs': [], 'outputs': [] }
         
         if type(w_initializer) is str:
             self.w_initializer = initializers.get(w_initializer)
@@ -123,26 +124,32 @@ class InputNode:
             self.w_initializer = w_initializer
         else:
             raise Exception('Expected w_initializer to be either a function or a function name, instead got {}.'.format(type(w_initializer)))
+
+        self.name = name
+        self.layer = self.to_layer()
             
     def connect(self, node):
         if not isinstance(node, DenseNode):
             raise Exception('Node must be of type DenseNode, instead got {}.'.format(type(node)))
         elif node == self:
             raise Exception('An attempt to connect a node to itself has been made.')
-        elif node in [c.output_node for c in self.connections]:
+        elif node in [c.output_node for c in self.connections['outputs']]:
             raise Exception('An attempt to connect two nodes that are already connected has been made.')
         else:
             w = self.w_initializer([1])
-            self.connections.append(NodeConnection(self, node, w))
+            c = NodeConnection(self, node, w)
+            self.connections['outputs'].append(c)
+            node.connections['inputs'].append(c)
+            
+    def to_layer(self):
+        return keras.layers.InputLayer((1, ), name=self.name)
 
 
-# In[5]:
+# In[24]:
 
 
 class DenseNode(InputNode):
-    def __init__(self, activation='relu', w_initializer='glorot_uniform', b_initializer='zeros'):
-        super().__init__(w_initializer)
-        
+    def __init__(self, activation='relu', w_initializer='glorot_uniform', b_initializer='zeros', name=None):
         if type(b_initializer) is str:
             self.b_initializer = initializers.get(b_initializer)
         elif inspect.isfunction(b_initializer):
@@ -151,31 +158,37 @@ class DenseNode(InputNode):
             raise Exception('Expected b_initializer to be either a function or a function name, instead got {}.'.format(type(b_initializer)))
             
         self.activation = activation
-        
+        super().__init__(w_initializer, name=name)
+
     def connect(self, node):
         if not isinstance(node, DenseNode):
             raise Exception('Node must be of type DenseNode, instead got {}.'.format(type(node)))
         elif node == self:
             raise Exception('An attempt to connect a node to itself has been made.')
-        elif node in [c.output_node for c in self.connections]:
+        elif node in [c.output_node for c in self.connections['outputs']]:
             raise Exception('An attempt to connect two nodes that are already connected has been made.')
         else:
             w = self.w_initializer([1])
             b = self.b_initializer([1])
-            self.connections.append(NodeConnection(self, node, w, b))
+            c = NodeConnection(self, node, w, b)
+            self.connections['outputs'].append(c)
+            node.connections['inputs'].append(c)
+            
+    def to_layer(self):
+        return keras.layers.Dense(1, self.activation, name=self.name)
 
 
-# In[6]:
+# In[25]:
 
 
 class GenomePCNN(Genome):
     def __init__(self, inputs, outputs, name=None):
         for node in inputs:
-            if not isinstance(node, InputNode):
+            if type(node) is not InputNode:
                 raise Exception('All inputs must be of type InputNode, instead got {}.'.format(type(node)))
                 
         for node in outputs:
-            if not isinstance(node, DenseNode):
+            if type(node) is not DenseNode:
                 raise Exception('All outputs must be of type DenseNode, instead got {}.'.format(type(node)))
         
         super().__init__(name=name, inputs=inputs, outputs=outputs)
@@ -192,6 +205,17 @@ class GenomePCNN(Genome):
                     
         return GenomePCNN(input_nodes, output_nodes, name=name)
     
+    def to_model(self):
+        def traverse_and_connect(connections, tensor):
+            for connection in connections:
+                x = connection.output_node.layer(tensor)
+                traverse_and_connect(connection.output_node.connections, x)
+
+        for node in self.inputs:
+            traverse_and_connect(node.connections, node.layer.input)
+
+        return keras.Model(inputs=[x.layer.input for x in self.inputs], outputs=[x.layer.output for x in self.outputs])
+    
     def __str__(self, with_props=True):
         s = f'<GenomePCNN fitness="{self.fitness}"'
         if self.name:
@@ -200,9 +224,54 @@ class GenomePCNN(Genome):
         return s
 
 
+# In[58]:
+
+
+l1 = [InputNode() for i in range(2)]
+l2 = [DenseNode() for i in range(2)]
+l3 = [DenseNode() for i in range(1)]
+
+l1[0].connect(l2[0])
+l1[0].connect(l2[1])
+l1[1].connect(l2[0])
+l1[1].connect(l2[1])
+l2[0].connect(l3[0])
+l2[1].connect(l3[0])
+
+connected_nodes = []
+def traverse_and_connect(node):
+    for connection in node.connections['outputs']:
+        if connection.output_node not in connected_nodes:
+            connection_node_inputs = connection.output_node.connections['inputs']
+            
+            if len(connection_node_inputs) > 1:
+                merge_layer = keras.layers.Concatenate()
+                x = merge_layer([input_connection.input_node.layer for input_connection in connection_node_inputs])
+                connection.output_node.layer(x)
+            else:
+                connection.output_node.layer(node.layer.output)
+                connected_nodes.append(connection.output_node)
+            
+            traverse_and_connect(connection.output_node)
+            
+for input_node in l1:
+    traverse_and_connect(input_node)
+
+
 # In[ ]:
 
 
-model = GenomePCNN.create_blank(3, 3)
-model.inputs
+
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
 
