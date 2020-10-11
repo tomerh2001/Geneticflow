@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[16]:
 
 
 import os, sys
@@ -9,13 +9,15 @@ sys.path.append(os.path.realpath('..'))
 
 import copy
 import inspect
+import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import initializers
+from tensorflow.keras.models import Model
 
 import utils
 
 
-# In[2]:
+# In[12]:
 
 
 class Genome:
@@ -100,162 +102,86 @@ class Genome:
 
 
 
-# In[3]:
+# In[13]:
 
 
-class NodeConnection:
-    def __init__(self, input_node, output_node, w, b=None):
-        self.input_node = input_node
-        self.output_node = output_node
-        self.w = w
-        self.b = b
-
-
-# In[22]:
-
-
-class InputNode:
-    def __init__(self, w_initializer='glorot_uniform', name=None):
-        self.connections = { 'inputs': [], 'outputs': [] }
+class InputNode(keras.layers.InputLayer):
+    def __init__(self):
+        super().__init__(1)
         
-        if type(w_initializer) is str:
-            self.w_initializer = initializers.get(w_initializer)
-        elif inspect.isfunction(w_initializer):
-            self.w_initializer = w_initializer
-        else:
-            raise Exception('Expected w_initializer to be either a function or a function name, instead got {}.'.format(type(w_initializer)))
+    @property
+    def output_tensor(self):
+        return self.output[0]
 
-        self.name = name
-        self.layer = self.to_layer()
-            
+
+# In[14]:
+
+
+class Node(keras.layers.Layer):
+    def __init__(self, activation='relu', kernel_init="glorot_uniform", bias_init="zeros", name=None):
+        super().__init__(trainable=False, name=name, dynamic=True)
+        self.activation = keras.activations.get(activation)
+        self.kernel_init = keras.initializers.get(kernel_init)
+        self.bias_init = keras.initializers.get(bias_init)
+        self.bias = tf.Variable(self.bias_init(1)[0], trainable=False, name='bias')
+        self.inputs = None
+        self.kernel = None
+    
     def connect(self, node):
-        if not isinstance(node, DenseNode):
-            raise Exception('Node must be of type DenseNode, instead got {}.'.format(type(node)))
-        elif node == self:
-            raise Exception('An attempt to connect a node to itself has been made.')
-        elif node in [c.output_node for c in self.connections['outputs']]:
-            raise Exception('An attempt to connect two nodes that are already connected has been made.')
+        """
+        Connects the current node to the given node while performing basic connection tasks such as:
+        1. Adding the given node to the `inbound_nodes` of the current node and adding the current node to the `outbound_nodes` of the given node.
+        2. Adding the output tensor of the given node to the inputs of the current node.
+        3. Adding a new weight to the kernel of the current node.
+        
+        Parameters
+        -----------
+        node: Node or InputNode
+            A node to add to the inputs of the current node.
+        
+        Returns
+        --------
+        out: None
+        """
+        if not (issubclass(type(node), (Node, InputNode))):
+            raise Exception('An attempt to connect {} with a {} has been made, expected Node or InputNode.'.format(self, type(node)))
+        
+        self.inbound_nodes.append(node)
+        node.outbound_nodes.append(self)
+        
+        if not tf.is_tensor(self.inputs):
+            self.inputs = node.output_tensor
         else:
-            w = self.w_initializer([1])
-            c = NodeConnection(self, node, w)
-            self.connections['outputs'].append(c)
-            node.connections['inputs'].append(c)
-            
-    def to_layer(self):
-        return keras.layers.InputLayer((1, ), name=self.name)
+            if type(node) is InputNode:
+                self.inputs = tf.concat([self.inputs, node.output_tensor], 0)
+            else:
+                self.inputs = tf.stack([self.inputs, node.output_tensor], 0)
+        
+        w = self.kernel_init([1])
+        if not tf.is_tensor(self.kernel):
+            self.kernel = tf.Variable(w, trainable=False, name='kernel')
+        else:
+            self.kernel = tf.concat([self.kernel, w], 0)
+        
+    def call(self, nodes):
+        if utils.is_array_like(nodes):
+            for node in nodes:
+                self.connect(node)
+        else:
+            self.connect(nodes)
+        
+        x = self.activation(tf.tensordot(self.inputs, self.kernel, 1) + self.bias)
+        self.output_tensor = tf.identity(x, name=f'{self.name}_output')
+        return self.output_tensor
 
 
 # In[24]:
 
 
-class DenseNode(InputNode):
-    def __init__(self, activation='relu', w_initializer='glorot_uniform', b_initializer='zeros', name=None):
-        if type(b_initializer) is str:
-            self.b_initializer = initializers.get(b_initializer)
-        elif inspect.isfunction(b_initializer):
-            self.b_initializer = b_initializer
-        else:
-            raise Exception('Expected b_initializer to be either a function or a function name, instead got {}.'.format(type(b_initializer)))
-            
-        self.activation = activation
-        super().__init__(w_initializer, name=name)
-
-    def connect(self, node):
-        if not isinstance(node, DenseNode):
-            raise Exception('Node must be of type DenseNode, instead got {}.'.format(type(node)))
-        elif node == self:
-            raise Exception('An attempt to connect a node to itself has been made.')
-        elif node in [c.output_node for c in self.connections['outputs']]:
-            raise Exception('An attempt to connect two nodes that are already connected has been made.')
-        else:
-            w = self.w_initializer([1])
-            b = self.b_initializer([1])
-            c = NodeConnection(self, node, w, b)
-            self.connections['outputs'].append(c)
-            node.connections['inputs'].append(c)
-            
-    def to_layer(self):
-        return keras.layers.Dense(1, self.activation, name=self.name)
-
-
-# In[25]:
-
-
-class GenomePCNN(Genome):
-    def __init__(self, inputs, outputs, name=None):
-        for node in inputs:
-            if type(node) is not InputNode:
-                raise Exception('All inputs must be of type InputNode, instead got {}.'.format(type(node)))
-                
-        for node in outputs:
-            if type(node) is not DenseNode:
-                raise Exception('All outputs must be of type DenseNode, instead got {}.'.format(type(node)))
+class GenomePCNN(Genome, Model):
+    def __init__(self, input_nodes, output_nodes, name='PCNN'):
+        super(Model, self).__init__(inputs=[x.input for x in input_nodes], outputs=[x.output_tensor for x in output_tensor], name=name)
         
-        super().__init__(name=name, inputs=inputs, outputs=outputs)
-        
-    @staticmethod
-    def create_blank(inputs, outputs, name=None):
-        input_nodes = [InputNode() for i in range(inputs)]
-        output_nodes = [DenseNode() for i in range(outputs)]
-        
-        for input_node in input_nodes:
-            for output_node in output_nodes:
-                if utils.chance(.5):
-                    input_node.connect(output_node)
-                    
-        return GenomePCNN(input_nodes, output_nodes, name=name)
-    
-    def to_model(self):
-        def traverse_and_connect(connections, tensor):
-            for connection in connections:
-                x = connection.output_node.layer(tensor)
-                traverse_and_connect(connection.output_node.connections, x)
-
-        for node in self.inputs:
-            traverse_and_connect(node.connections, node.layer.input)
-
-        return keras.Model(inputs=[x.layer.input for x in self.inputs], outputs=[x.layer.output for x in self.outputs])
-    
-    def __str__(self, with_props=True):
-        s = f'<GenomePCNN fitness="{self.fitness}"'
-        if self.name:
-            s += f' name="{self.name}"'
-        s+= f' inputs="{len(self.inputs)}" outputs="{len(self.outputs)}">'
-        return s
-
-
-# In[58]:
-
-
-l1 = [InputNode() for i in range(2)]
-l2 = [DenseNode() for i in range(2)]
-l3 = [DenseNode() for i in range(1)]
-
-l1[0].connect(l2[0])
-l1[0].connect(l2[1])
-l1[1].connect(l2[0])
-l1[1].connect(l2[1])
-l2[0].connect(l3[0])
-l2[1].connect(l3[0])
-
-connected_nodes = []
-def traverse_and_connect(node):
-    for connection in node.connections['outputs']:
-        if connection.output_node not in connected_nodes:
-            connection_node_inputs = connection.output_node.connections['inputs']
-            
-            if len(connection_node_inputs) > 1:
-                merge_layer = keras.layers.Concatenate()
-                x = merge_layer([input_connection.input_node.layer for input_connection in connection_node_inputs])
-                connection.output_node.layer(x)
-            else:
-                connection.output_node.layer(node.layer.output)
-                connected_nodes.append(connection.output_node)
-            
-            traverse_and_connect(connection.output_node)
-            
-for input_node in l1:
-    traverse_and_connect(input_node)
 
 
 # In[ ]:
@@ -268,6 +194,44 @@ for input_node in l1:
 
 
 
+
+
+# In[23]:
+
+
+# Test 1
+# ------
+import numpy as np
+relu = keras.activations.relu
+
+# Nodes
+i1, i2, i3 = InputNode(), InputNode(), InputNode()
+n1, n2 = Node(), Node()
+o1 = Node()
+
+n1(i1)
+n2([i1, i2, i3])
+o1([n1, n2, i3])
+
+# Model
+model = keras.Model(inputs=[i1.input, i2.input, i3.input], outputs=[o1.output_tensor])
+ 
+# Weights
+w1 = n1.kernel.numpy()[0]
+w2, w3, w4 = n2.kernel.numpy()
+w5, w6, w7 = o1.kernel.numpy()
+
+# Input Data
+a, b, c = np.ones((1, 1)), np.ones((1, 1)), np.ones((1, 1))
+
+# Self-check of formula
+x1 = relu(a * w1)
+x2 = relu(a * w2 + b * w3 + c * w4)
+x3 = relu(x1 * w5 + x2 * w6 + c * w7)
+
+# Test prediction
+x_pred = model.predict([a, b, c])
+np.round(x_pred, 5) == np.round(x3.numpy()[0, 0], 5)
 
 
 # In[ ]:
