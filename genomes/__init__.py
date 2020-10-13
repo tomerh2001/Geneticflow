@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[16]:
+# In[1]:
 
 
 import os, sys
@@ -17,7 +17,7 @@ from tensorflow.keras.models import Model
 import utils
 
 
-# In[12]:
+# In[2]:
 
 
 class Genome:
@@ -102,7 +102,7 @@ class Genome:
 
 
 
-# In[13]:
+# In[197]:
 
 
 class InputNode(keras.layers.InputLayer):
@@ -111,21 +111,35 @@ class InputNode(keras.layers.InputLayer):
         
     @property
     def output_tensor(self):
-        return self.output[0]
+        return self.output
 
 
-# In[14]:
+# In[198]:
 
 
 class Node(keras.layers.Layer):
     def __init__(self, activation='relu', kernel_init="glorot_uniform", bias_init="zeros", name=None):
         super().__init__(trainable=False, name=name, dynamic=True)
         self.activation = keras.activations.get(activation)
+        
         self.kernel_init = keras.initializers.get(kernel_init)
         self.bias_init = keras.initializers.get(bias_init)
+        
         self.bias = tf.Variable(self.bias_init(1)[0], trainable=False, name='bias')
+#         self.bias = self.add_weight(name = 'bias', initializer=self.bias_init, trainable=False)
+
         self.inputs = None
         self.kernel = None
+        
+    def get_config(self):
+        return {
+            'name': self.name,
+            'activation': self.activation.__name__,
+            'kernel_init': type(self.kernel_init).__name__,
+            'bias_init': type(self.bias_init).__name__,
+            'kernel': self.kernel,
+            'bias': self.bias
+        }
     
     def connect(self, node):
         """
@@ -162,26 +176,49 @@ class Node(keras.layers.Layer):
             self.kernel = tf.Variable(w, trainable=False, name='kernel')
         else:
             self.kernel = tf.concat([self.kernel, w], 0)
-        
+    
     def call(self, nodes):
         if utils.is_array_like(nodes):
             for node in nodes:
                 self.connect(node)
         else:
             self.connect(nodes)
-        
+
         x = self.activation(tf.tensordot(self.inputs, self.kernel, 1) + self.bias)
         self.output_tensor = tf.identity(x, name=f'{self.name}_output')
-        return self.output_tensor
+        print(x)
+        return self.kernel
 
 
-# In[24]:
+# In[ ]:
 
 
-class GenomePCNN(Genome, Model):
-    def __init__(self, input_nodes, output_nodes, name='PCNN'):
-        super(Model, self).__init__(inputs=[x.input for x in input_nodes], outputs=[x.output_tensor for x in output_tensor], name=name)
+class GenomePCNN(Genome):
+    def __init__(self, input_nodes, output_nodes, name=None):
+        for node in input_nodes:
+            if not issubclass(type(node), InputNode):
+                raise Exception('All input nodes of GenomePCNN must be of type InputNode, instead got {}.'.format(type(node)))
+
+        for node in output_nodes:
+            if not issubclass(type(node), Node):
+                raise Exception('All output nodes of GenomePCNN must be of type Node, instead got {}.'.format(type(node)))
         
+        super().__init__(input_nodes=input_nodes, output_nodes=output_nodes, name=name)
+    
+    def to_model(self):
+        return keras.Model(inputs=[x.input for x in self.input_nodes], outputs=[x.output_tensor for x in self.output_nodes])
+
+
+# In[199]:
+
+
+
+
+
+# In[ ]:
+
+
+
 
 
 # In[ ]:
